@@ -262,6 +262,7 @@ curl -F 'email=YOUR\@EMAIL.com' -F 'passcode=PASSCODEHERE' -F 'file=@/path/to/yo
   return undef;
 }
 
+my $TOTAL_FILE_INPUTS = 30;
 sub act_printform {
   my $buf = '
 <div class=dialog>
@@ -269,12 +270,12 @@ sub act_printform {
 
 <p align=center><a href="?act=cmdlineinstruct">command line upload instructions</a>
 
-<form method=post enctype="multipart/form-data">
+<form method=post enctype="multipart/form-data" onsubmit="showuploadmsg(); return true;">
   <p>
   <label>email<br><input required placeholder="your.email@address.com" type=email name=email value="'.escapeHTML(param('email')).'"></label>
   <p>
   <label>passcode<br>
-    <input type=text name=passcode value="'.escapeHTML(param('passcode')).'">
+    <input required type=text name=passcode value="'.escapeHTML(param('passcode')).'">
   </label>
   <p>
   <label>message<br>
@@ -283,32 +284,9 @@ sub act_printform {
   <p>
   <fieldset>
     <legend>upload files</legend>
-    <div style="overflow: auto; height: 200px;">
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
-    <input type=file name=file><br>
+    <div style="overflow: auto; height: 200px;">';
+  $buf .= "<input type=file name=file><br>\n" for 1 .. $TOTAL_FILE_INPUTS;
+  $buf .= '
   </fieldset>
 
   <div id=uploadmsg>
@@ -316,13 +294,12 @@ sub act_printform {
   </div>
 
   <div id=buttonbar>
-    <input class=primary-btn type=submit name=act value=upload onclick="showuploadmsg();">
+    <input class=primary-btn type=submit name=act value=upload>
   </div>
 </form>
 </div>
 <script>
 function showuploadmsg(){
-  document.getElementById("buttonbar").style.display="none";
   document.getElementById("uploadmsg").style.display="block";
 }
 </script>';
