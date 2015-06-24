@@ -1,0 +1,8 @@
+filedrop - host a simple file upload form that notifies you when someone you've allowed uploads a file
+
+Instructions:
+
+1) copy filedrop to your cgi-bin directory
+
+2) edit filedrop config at the top of the script
+

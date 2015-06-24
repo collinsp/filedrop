@@ -1,0 +1,334 @@
+#!/usr/bin/perl
+
+=comment
+
+filedrop - host a simple file upload form that notifies you when someone you've allowed uploads a file
+
+=cut
+
+package FILEDROP;
+
+# create directory
+# mkdir -p UPLOAD_DIR
+# chgrp apache UPLOAD_DIR
+# chmod ug+rw UPLOAD_DIR
+my $UPLOAD_DIR = "/data/filedrop";
+my $EMAIL_NOTIFY = 'email@address.com';
+my $EMAIL_FROM = 'noreply@name.com';
+my @ALLOW_PASSCODE = ('allowpass','allowpass2');
+
+use strict;
+use Mail::Sendmail;
+use CGI qw(escapeHTML);
+
+our ($q);
+
+sub param { return scalar($q->param(@_)); }
+
+sub http_header {
+  return CGI::header(@_);
+}
+
+sub act_css {
+  my $buf = 
+'body {
+  font-family: sans-serif;
+  color: #222;
+  background-color: white;
+}
+.dialog {
+  background-color: #eee;
+  margin: auto; 
+  max-width: 600px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  margin: 10px auto 40px auto;
+}
+h1 {
+  text-align: center;
+  margin-top: 0;
+}
+fieldset {
+  border: 1px solid #ccc;  
+  border-radius: 6px;
+}
+
+input[type=text],input[type=file],input[type=email], textarea {
+  color: blue;
+  padding: 6px;
+  border:1px solid #ccc; 
+  border-radius: 6px;
+  width: 500px;
+}
+input[type=file] {
+  border: 0;
+}
+.primary-btn {
+  background-color: green;
+  color: white;
+  border-radius: 10px;
+  padding: 10px;
+  font-weight: bold;
+  border: 1px solid green;
+}
+input[type=submit],a,button {
+  cursor: pointer;
+}
+label,legend {
+  font-weight: bold;
+  color: #444;
+}
+label {
+  display: inline-block;
+  padding: 4px;
+}
+#uploadmsg {
+  display: none;
+  padding: 20px;
+  color: #900;
+}
+#buttonbar {
+  margin: 10px;
+  text-align: center;
+}';
+  print http_header(-type => 'text/css', -cache_control => 'max-age=9999'), $buf;
+  return undef;
+}
+
+sub html_header {
+  my $buf = 
+'<!DOCTYPE html>
+<html>
+<head>
+<title>upload</title>
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+<link rel="stylesheet" type="text/css" href="?act=css">
+</head>
+<body>
+';
+  return $buf;
+}
+sub html_footer {
+  my $buf = "
+</body>
+</html>";
+  return $buf;
+}
+
+sub handler {
+  local ($q);
+  $q = new CGI();
+  my $act = param('act');
+  my $codeRef = __PACKAGE__->can('act_'.$act);
+
+  if (! $codeRef) {
+    if (param('file') eq '') {
+      $codeRef = \&act_printform;
+    } else {
+      $codeRef = \&act_upload;
+    }
+  }
+  
+  eval {
+   $codeRef->();
+  };
+  if ($@) {
+    print_alert("Error: ".escapeHTML($@));
+  }
+  return undef;
+}
+
+sub print_alert {
+  my $buf = "<div class=dialog>".join("\n", @_)."<p align=center><button type=button class=primary-btn onclick='history.back();'>ok</button></div>";
+  print http_header(), html_header(), $buf, html_footer();
+  return undef;
+}
+
+sub inArray {
+  my ($val, $ar) = @_;
+  for (@$ar) {
+    return 1 if $val eq $_;
+  }
+  return 0;
+}
+
+sub clean_filename {
+  my ($fn) = @_;
+  if ($fn =~ /([^\/\\]+)$/) {
+    $fn = $1;
+  }
+  $fn =~ s/[^\.\w]//g;
+  return $fn;
+}
+
+sub file_size {
+  my ($path) = @_;
+  my (@stat) = stat $path;
+  my $fileSize = $stat[7];
+  my $unit = 'b';
+  if ($fileSize > 0) {
+    if ($fileSize > 1024) {
+      $fileSize /= 1024;
+      $unit = 'KB';
+    }
+    if ($fileSize > 1024) {
+      $fileSize /= 1024;
+      $unit = 'MB';
+    }
+    if ($fileSize > 1024) {
+      $fileSize /= 1024;
+      $unit = 'GB';
+    }
+    $fileSize =~ s/(\.\d\d).*/$1/;
+  }
+  return ($fileSize, $unit);
+}
+
+sub rfill {
+  my ($v,$delimiter, $len) = @_;
+  $len ||= 30;
+  $delimiter ||= ' ';
+ 
+  my $need = $len - length($v);
+  for (1 .. $need) {
+    $v .= $delimiter;
+  }
+  return $v;
+}
+
+sub act_upload {
+  return print_alert("Invalid passcode") unless inArray(param('passcode'), \@ALLOW_PASSCODE);
+  return print_alert("Missing Email address") unless param('email') =~ /^[^\@]+\@[^\@]+$/;
+  chdir $UPLOAD_DIR or die "could not chdir $UPLOAD_DIR; $!\n";
+
+  my @buf;
+
+  # load files
+  my @fn = $q->param('file');
+  my @fh = $q->upload('file'); 
+  my $i = 0;
+  my $l = scalar(@fn);
+  while ($i < $l) {
+    my $fn = clean_filename($fn[$i]);
+    my $fh = $fh[$i];
+    if ($fn ne '') {
+      unlink $fn if -f $fn;
+      open my $fh2, "> $fn" or die "could not write $fn; $!\n";
+      while (<$fh>) {
+        print $fh2 $_;
+      }
+      close $fh2;
+      my ($fileSize, $unit) = file_size($fn);
+      push @buf, rfill("$fn ", ".", 50)." $fileSize $unit" if $fileSize > 0;
+    }
+
+    $i++;
+  }
+
+  if (scalar(@buf) == 0) {
+    return print_alert("No files uploaded.");
+  }
+
+  my $email = param('email');
+  my $body = "$email has uploaded the following files:\n".join("\n", @buf);
+  $body .= "\n\nmessage:\n".param('message') if param('message') ne '';
+
+  sendmail(
+    to => $EMAIL_NOTIFY,
+    cc => $email,
+    'Reply-To' => $email,
+    from => $EMAIL_FROM,
+    subject => 'file upload receipt',
+    body => $body
+  ) or die $Mail::Sendmail::error;
+
+  if ($ENV{HTTP_USER_AGENT} =~ /\bcurl\b/) {
+    print http_header(-type => 'text/plain'), "files uploaded successfully\n".join("\n", @buf)."\n";
+  } else {
+    print_alert("<h1>files uploaded successfully</h1>\n<pre>\n".join("\n", @buf)."\n</pre>\n");
+  }
+}
+
+sub act_cmdlineinstruct {
+  print http_header( -type => 'text/plain'),
+"Command Line Upload Instructions
+===============================================
+
+Run the following command in your console:
+
+curl -F 'email=YOUR\@EMAIL.com' -F 'passcode=PASSCODEHERE' -F 'file=@/path/to/your/file' ".$q->url()."
+";
+  return undef;
+}
+
+sub act_printform {
+  my $buf = '
+<div class=dialog>
+<h1>Secure File Drop</h1>
+
+<p align=center><a href="?act=cmdlineinstruct">command line upload instructions</a>
+
+<form method=post enctype="multipart/form-data">
+  <p>
+  <label>email<br><input required placeholder="your.email@address.com" type=email name=email value="'.escapeHTML(param('email')).'"></label>
+  <p>
+  <label>passcode<br>
+    <input type=text name=passcode value="'.escapeHTML(param('passcode')).'">
+  </label>
+  <p>
+  <label>message<br>
+    <textarea name=message placeholder=optional>'.escapeHTML(param('message')).'</textarea>
+  </label>
+  <p>
+  <fieldset>
+    <legend>upload files</legend>
+    <div style="overflow: auto; height: 200px;">
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+    <input type=file name=file><br>
+  </fieldset>
+
+  <div id=uploadmsg>
+    Please wait while your file(s) are being uploaded. Do not navigate away from this page during the upload process. You may open another web browser tab/window while you are waiting.
+  </div>
+
+  <div id=buttonbar>
+    <input class=primary-btn type=submit name=act value=upload onclick="showuploadmsg();">
+  </div>
+</form>
+</div>
+<script>
+function showuploadmsg(){
+  document.getElementById("buttonbar").style.display="none";
+  document.getElementById("uploadmsg").style.display="block";
+}
+</script>';
+  print CGI::header(), html_header(), $buf, html_footer();
+}
+
+handler() unless caller;
+
+1;
