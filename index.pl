@@ -222,7 +222,7 @@ sub act_printform {
   <fieldset>
     <legend>upload files</legend>
     <div style="overflow: auto; height: 200px;">';
-  $buf .= "<input type=file name=file><br>\n" for 1 .. $TOTAL_FILE_INPUTS;
+  $buf .= "<input type=file name=file multiple><br>\n" for 1 .. $TOTAL_FILE_INPUTS;
   $buf .= '
   </fieldset>
 
