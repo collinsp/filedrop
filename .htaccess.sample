@@ -1,0 +1,10 @@
+
+# file drop config settings
+SetEnv UPLOAD_DIR /data/filedrop
+SetEnv EMAIL_NOTIFY email@address.com
+SetEnv EMAIL_FROM noreply@name.com
+SetEnv ALLOW_PASSCODE allowpass,allowpass2
+
+Options +ExecCGI
+AddHandler cgi-script pl
+DirectoryIndex index.pl

@@ -2,7 +2,16 @@ filedrop - host a simple file upload form that notifies you when someone you've 
 
 Instructions:
 
-1) copy filedrop to your cgi-bin directory
+Install filedrop directory somewhere.
 
-2) edit filedrop config at the top of the script
+Configure Apache to see the directory.
 
+  Alias /filedrop /path/to/filedrop
+  <Directory /path/to/filedrop>
+    AllowOverride All
+    Allow from All
+  </Directory>
+
+# configure filedrop settings
+cd /path/to/filedrop
+cp .htaccess.sample .htaccess

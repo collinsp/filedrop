@@ -8,15 +8,6 @@ filedrop - host a simple file upload form that notifies you when someone you've 
 
 package FILEDROP;
 
-# create directory
-# mkdir -p UPLOAD_DIR
-# chgrp apache UPLOAD_DIR
-# chmod ug+rw UPLOAD_DIR
-my $UPLOAD_DIR = "/data/filedrop";
-my $EMAIL_NOTIFY = 'email@address.com';
-my $EMAIL_FROM = 'noreply@name.com';
-my @ALLOW_PASSCODE = ('allowpass','allowpass2');
-
 use strict;
 use Mail::Sendmail;
 use CGI qw(escapeHTML);
@@ -29,73 +20,6 @@ sub http_header {
   return CGI::header(@_);
 }
 
-sub act_css {
-  my $buf = 
-'body {
-  font-family: sans-serif;
-  color: #222;
-  background-color: white;
-}
-.dialog {
-  background-color: #eee;
-  margin: auto; 
-  max-width: 600px;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  margin: 10px auto 40px auto;
-}
-h1 {
-  text-align: center;
-  margin-top: 0;
-}
-fieldset {
-  border: 1px solid #ccc;  
-  border-radius: 6px;
-}
-
-input[type=text],input[type=file],input[type=email], textarea {
-  color: blue;
-  padding: 6px;
-  border:1px solid #ccc; 
-  border-radius: 6px;
-  width: 500px;
-}
-input[type=file] {
-  border: 0;
-}
-.primary-btn {
-  background-color: green;
-  color: white;
-  border-radius: 10px;
-  padding: 10px;
-  font-weight: bold;
-  border: 1px solid green;
-}
-input[type=submit],a,button {
-  cursor: pointer;
-}
-label,legend {
-  font-weight: bold;
-  color: #444;
-}
-label {
-  display: inline-block;
-  padding: 4px;
-}
-#uploadmsg {
-  display: none;
-  padding: 20px;
-  color: #900;
-}
-#buttonbar {
-  margin: 10px;
-  text-align: center;
-}';
-  print http_header(-type => 'text/css', -cache_control => 'max-age=9999'), $buf;
-  return undef;
-}
-
 sub html_header {
   my $buf = 
 '<!DOCTYPE html>
@@ -103,7 +27,7 @@ sub html_header {
 <head>
 <title>upload</title>
 <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
-<link rel="stylesheet" type="text/css" href="?act=css">
+<link rel="stylesheet" type="text/css" href="main.css">
 </head>
 <body>
 ';
@@ -119,6 +43,15 @@ sub html_footer {
 sub handler {
   local ($q);
   $q = new CGI();
+
+  # check for required config
+  return print_alert("Error: missing ENV UPLOAD_DIR") if $ENV{UPLOAD_DIR} eq '';
+  return print_alert("Error: ENV UPLOAD_DIR: $ENV{UPLOAD_DIR} is not writable")
+    unless -d $ENV{UPLOAD_DIR} && -w $ENV{UPLOAD_DIR};
+  return print_alert("Error: missing ENV ALLOW_PASSCODE") if $ENV{ALLOW_PASSCODE} eq '';
+  return print_alert("Error: invalid ENV EMAIL_NOTIFY") unless $ENV{EMAIL_NOTIFY} =~ /\w\@\w/;
+  return print_alert("Error: invalid ENV EMAIL_FROM") unless $ENV{EMAIL_FROM} =~ /\w\@\w/;
+
   my $act = param('act');
   my $codeRef = __PACKAGE__->can('act_'.$act);
 
@@ -145,21 +78,22 @@ sub print_alert {
   return undef;
 }
 
-sub inArray {
-  my ($val, $ar) = @_;
-  for (@$ar) {
-    return 1 if $val eq $_;
+sub isValidPasscode {
+  my ($p) = @_;
+  for (split /\s*\,\s*/, $ENV{ALLOW_PASSCODE}) {
+    return 1 if $_ eq $p;
   }
   return 0;
 }
 
 sub clean_filename {
   my ($fn) = @_;
+  my $rv;
   if ($fn =~ /([^\/\\]+)$/) {
-    $fn = $1;
+    $rv = $1;
+    $rv =~ s/[^\.\w]//g;
   }
-  $fn =~ s/[^\.\w]//g;
-  return $fn;
+  return $rv;
 }
 
 sub file_size {
@@ -198,9 +132,9 @@ sub rfill {
 }
 
 sub act_upload {
-  return print_alert("Invalid passcode") unless inArray(param('passcode'), \@ALLOW_PASSCODE);
+  return print_alert("Invalid passcode") unless isValidPasscode(param('passcode'));
   return print_alert("Missing Email address") unless param('email') =~ /^[^\@]+\@[^\@]+$/;
-  chdir $UPLOAD_DIR or die "could not chdir $UPLOAD_DIR; $!\n";
+  chdir $ENV{UPLOAD_DIR} or die "could not chdir $ENV{UPLOAD_DIR}; $!\n";
 
   my @buf;
 
@@ -234,11 +168,14 @@ sub act_upload {
   my $body = "$email has uploaded the following files:\n".join("\n", @buf);
   $body .= "\n\nmessage:\n".param('message') if param('message') ne '';
 
+  my %opts = (
+  );
+
   sendmail(
-    to => $EMAIL_NOTIFY,
+    to => $ENV{EMAIL_NOTIFY},
     cc => $email,
     'Reply-To' => $email,
-    from => $EMAIL_FROM,
+    from => $ENV{EMAIL_FROM},
     subject => 'file upload receipt',
     body => $body
   ) or die $Mail::Sendmail::error;

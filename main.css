@@ -1,0 +1,61 @@
+body {
+  font-family: sans-serif;
+  color: #222;
+  background-color: white;
+}
+.dialog {
+  background-color: #eee;
+  margin: auto; 
+  max-width: 600px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  margin: 10px auto 40px auto;
+}
+h1 {
+  text-align: center;
+  margin-top: 0;
+}
+fieldset {
+  border: 1px solid #ccc;  
+  border-radius: 6px;
+}
+
+input[type=text],input[type=file],input[type=email], textarea {
+  color: blue;
+  padding: 6px;
+  border:1px solid #ccc; 
+  border-radius: 6px;
+  width: 500px;
+}
+input[type=file] {
+  border: 0;
+}
+.primary-btn {
+  background-color: green;
+  color: white;
+  border-radius: 10px;
+  padding: 10px;
+  font-weight: bold;
+  border: 1px solid green;
+}
+input[type=submit],a,button {
+  cursor: pointer;
+}
+label,legend {
+  font-weight: bold;
+  color: #444;
+}
+label {
+  display: inline-block;
+  padding: 4px;
+}
+#uploadmsg {
+  display: none;
+  padding: 20px;
+  color: #900;
+}
+#buttonbar {
+  margin: 10px;
+  text-align: center;
+}
